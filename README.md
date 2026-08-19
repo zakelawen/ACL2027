@@ -160,6 +160,36 @@ multimodal features, and five concurrent requests. The five-request default
 matches the Mamba state-cache limit observed for this checkpoint on the two
 local RTX 4090 D GPUs.
 
+## Official split (why 300)
+
+CLAPnq's public **answerable development set is 300 questions**. That is
+the entire official public eval split, not a subsample. Official sizes:
+
+| Split | Answerable | Unanswerable | Notes |
+|---|---|---|---|
+| Train | 1954 | 1791 | Training data |
+| Dev | **300** | 300 | Public evaluation split (this repo) |
+| Test | 301 | 300 | **Hidden** by the dataset authors |
+
+This experiment only uses answerable items (Judge needs human references).
+Unanswerable and the hidden test set are out of scope. Train is not used
+as a test set.
+
+## One-command formal run
+
+```bash
+cd /home/qluai/ZJS/ACL2027/clapnq_eval
+conda activate ACL2027-sglang
+bash scripts/run_experiment.sh
+```
+
+The script starts and stops each generator, then the two-GPU Judge, then
+runs `score`. Logs go to `runs/main/logs/`. Resume a later stage with
+`--skip-prepare`, `--judge-only`, or `--score-only`.
+
+Manual step-by-step commands are below if you prefer to drive the servers
+yourself.
+
 ## 1. Prepare CLAPnq
 
 The configured file is the official public answerable development split,
