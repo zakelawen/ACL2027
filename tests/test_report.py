@@ -101,7 +101,7 @@ class ReportTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Unexpected example_id"):
                 score_run(config)
 
-    def test_score_accepts_a_single_configured_condition(self) -> None:
+    def test_score_rejects_a_single_configured_condition(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config, example = self._config(Path(directory))
             config.generation.conditions = ["gold"]
@@ -112,12 +112,8 @@ class ReportTests(unittest.TestCase):
                 answer="Reference answer.",
                 label="CORRECT",
             )
-            result = score_run(config)
-            paired = json.loads(Path(str(result["paired"])).read_text(encoding="utf-8"))
-            self.assertEqual(paired, [])
-            summary = json.loads(Path(str(result["summary"])).read_text(encoding="utf-8"))
-            self.assertEqual(len(summary), 1)
-            self.assertEqual(summary[0]["condition"], "gold")
+            with self.assertRaisesRegex(RuntimeError, "gold and closed_book"):
+                score_run(config)
 
     def test_score_ignores_quarantined_failures_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

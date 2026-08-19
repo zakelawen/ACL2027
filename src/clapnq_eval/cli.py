@@ -67,6 +67,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             "conditions": conditions,
             "outputs": _paths(outputs),
         }
+        server_snapshot = config.run_dir / "judge_server.json"
+        if server_snapshot.exists():
+            details["judge_server"] = json.loads(
+                server_snapshot.read_text(encoding="utf-8")
+            )
         update_manifest(config, action="judge", details=details)
         _print_json(details)
         return 0

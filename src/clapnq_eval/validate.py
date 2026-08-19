@@ -15,6 +15,7 @@ from .prompts import (
     build_judge_user_prompt,
     prompt_sha256,
 )
+from .runtime import judge_server_matches_config
 from .schema import JudgeResult
 
 
@@ -113,6 +114,7 @@ def validate_judgment_row(
     condition: Condition,
     path: Path,
     generation_path: Path | None = None,
+    server: dict[str, Any] | None = None,
     context: Literal["resume", "input"] = "input",
 ) -> None:
     example_id = str(row.get("example_id", ""))
@@ -159,6 +161,15 @@ def validate_judgment_row(
                 f"Invalid judgment {path}: {field} mismatch for {example_id}"
             )
 
+    _validate_judge_server(
+        row=row,
+        config=config,
+        example_id=example_id,
+        path=path,
+        server=server,
+        context=context,
+    )
+
     parsed = JudgeResult.model_validate(
         {"label": row.get("label"), "reason": row.get("reason")}
     )
@@ -177,6 +188,7 @@ def validate_judgment_rows(
     model_key: str,
     condition: Condition,
     path: Path,
+    server: dict[str, Any] | None = None,
     context: Literal["resume", "input"] = "resume",
 ) -> None:
     generation_by_id = {str(row["example_id"]): row for row in generation_rows}
@@ -196,5 +208,38 @@ def validate_judgment_rows(
             model=model_key,
             condition=condition,
             path=path,
+            server=server,
             context=context,
+        )
+
+
+def _validate_judge_server(
+    *,
+    row: dict[str, Any],
+    config: ExperimentConfig,
+    example_id: str,
+    path: Path,
+    server: dict[str, Any] | None,
+    context: Literal["resume", "input"],
+) -> None:
+    recorded = row.get("judge_server")
+    if server is not None:
+        if recorded != server:
+            if context == "resume":
+                raise RuntimeError(
+                    f"Cannot resume {path}: judge_server mismatch for {example_id}. "
+                    "The running Judge server does not match the recorded runtime."
+                )
+            raise RuntimeError(
+                f"Invalid judgment {path}: judge_server mismatch for {example_id}"
+            )
+        return
+    if recorded is None:
+        return
+    if not isinstance(recorded, dict) or not judge_server_matches_config(
+        config, recorded
+    ):
+        raise RuntimeError(
+            f"Invalid judgment {path}: judge_server does not match the YAML "
+            f"for {example_id}"
         )

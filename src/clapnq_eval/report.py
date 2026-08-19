@@ -113,6 +113,13 @@ def _load_and_validate_inputs(
             + ", ".join(repr(value) for value in duplicates)
         )
 
+    configured_conditions = set(config.generation.conditions)
+    if configured_conditions != {"gold", "closed_book"}:
+        raise RuntimeError(
+            "Formal scoring requires exactly the gold and closed_book conditions; "
+            f"configured conditions are {sorted(configured_conditions)}"
+        )
+
     expected_ids = set(examples_by_id)
     judgment_dir = config.run_dir / "judgments"
     generation_dir = config.run_dir / "generations"
@@ -305,7 +312,9 @@ def _paired_summaries(
         gold = indexed.get((model, "gold"), {})
         closed = indexed.get((model, "closed_book"), {})
         if not gold or not closed:
-            continue
+            raise RuntimeError(
+                f"Formal scoring requires both gold and closed_book judgments for {model}"
+            )
         gold_ids = set(gold)
         closed_ids = set(closed)
         if gold_ids != closed_ids:

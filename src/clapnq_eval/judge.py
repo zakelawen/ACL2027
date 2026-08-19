@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from tqdm import tqdm
 
 from .api import ChatClient, ChatCompletionError, retry_async
+from .runtime import verify_judge_server
 from .config import Condition, ExperimentConfig
 from .data import Example, load_examples
 from .io import (
@@ -99,6 +100,14 @@ async def judge_answers(
             base_seconds=config.judge.retry_base_seconds,
             description=f"judge server check for {config.judge.served_model}",
         )
+        info = await retry_async(
+            client.get_server_info,
+            attempts=config.judge.max_retries,
+            base_seconds=config.judge.retry_base_seconds,
+            description="judge /server_info",
+        )
+        server = verify_judge_server(config, info)
+        _write_judge_server_snapshot(config, server)
         outputs: list[Path] = []
         for model_key in model_keys:
             for condition in conditions:
@@ -109,6 +118,7 @@ async def judge_answers(
                     model_key=model_key,
                     condition=condition,
                     limit=limit,
+                    server=server,
                 )
                 outputs.append(success_path)
                 if failed_path.exists():
@@ -126,6 +136,7 @@ async def _judge_file(
     model_key: str,
     condition: Condition,
     limit: int | None,
+    server: dict[str, Any],
 ) -> tuple[Path, Path]:
     generation_path = config.run_dir / "generations" / f"{model_key}.{condition}.jsonl"
     if not generation_path.exists():
@@ -162,6 +173,7 @@ async def _judge_file(
             model_key=model_key,
             condition=condition,
             path=output_path,
+            server=server,
             context="resume",
         )
         done = {str(row["example_id"]) for row in existing}
@@ -283,6 +295,7 @@ async def _judge_file(
                             JUDGE_SYSTEM_PROMPT, user_prompt
                         ),
                         "judge_parameters": parameters,
+                        "judge_server": server,
                         "finish_reason": response.finish_reason,
                         "usage": response.usage_dict(),
                         "latency_seconds": response.latency_seconds,
@@ -327,3 +340,17 @@ async def _judge_file(
                 failed_path,
             )
         return output_path, failed_path
+
+
+def _write_judge_server_snapshot(
+    config: ExperimentConfig, server: dict[str, Any]
+) -> Path:
+    config.run_dir.mkdir(parents=True, exist_ok=True)
+    path = config.run_dir / "judge_server.json"
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(server, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+    return path

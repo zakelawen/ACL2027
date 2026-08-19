@@ -42,9 +42,9 @@ judge:
   enable_thinking: false
   deterministic_inference: true
 
-  # Official Qwen3.8 non-thinking sampling, except presence_penalty.
-  # Official chat non-thinking uses 1.5; this Judge uses 0.0 because the
-  # schema emits a classification label, not open-ended chat.
+  # Custom structured-judge profile: official non-thinking sampling
+  # except presence_penalty. Official chat non-thinking uses 1.5; this
+  # Judge uses 0.0 because the schema emits a classification label.
   temperature: 0.7
   top_p: 0.8
   top_k: 20

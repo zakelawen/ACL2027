@@ -53,8 +53,14 @@ class ChatResult:
         }
 
 
+def openai_compat_root(base_url: str) -> str:
+    return str(base_url).rstrip("/").removesuffix("/v1")
+
+
 class ChatClient:
     def __init__(self, *, base_url: str, api_key: str, timeout_seconds: float) -> None:
+        self._base_url = base_url
+        self._timeout_seconds = timeout_seconds
         self._client = AsyncOpenAI(
             base_url=base_url,
             api_key=api_key,
@@ -71,6 +77,27 @@ class ChatClient:
         if model not in available:
             rendered = ", ".join(sorted(available)) or "<none>"
             raise RuntimeError(f"Model {model!r} is not served. Available models: {rendered}")
+
+    async def get_server_info(self) -> dict[str, Any]:
+        import httpx
+
+        root = openai_compat_root(self._base_url)
+        last_status: int | None = None
+        async with httpx.AsyncClient(timeout=self._timeout_seconds) as http:
+            for path in ("/server_info", "/get_server_info"):
+                response = await http.get(root + path)
+                last_status = response.status_code
+                if response.status_code != 200:
+                    continue
+                payload = response.json()
+                if not isinstance(payload, dict):
+                    raise RuntimeError(
+                        f"Judge {path} returned a non-object payload"
+                    )
+                return payload
+        raise RuntimeError(
+            f"Judge /server_info is unavailable (HTTP {last_status})"
+        )
 
     async def chat(
         self,

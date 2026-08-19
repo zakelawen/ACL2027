@@ -10,7 +10,7 @@ CONFIG = Path(__file__).parents[1] / "configs" / "experiment.yaml"
 
 
 class ConfigTests(unittest.TestCase):
-    def test_official_non_thinking_judge_profile(self) -> None:
+    def test_structured_judge_sampling_profile(self) -> None:
         config = load_config(CONFIG)
         self.assertFalse(config.judge.enable_thinking)
         self.assertTrue(config.judge.deterministic_inference)

@@ -90,23 +90,24 @@ settings under an existing signed run is rejected before inference. Use
 
 ## Judge parameters
 
-The default configuration follows the official Qwen3.8 non-thinking profile
-bundled with the local model, with one structured-output exception:
+This is a **custom structured-judge profile**, not the official Qwen3.8
+chat profile. Sampling follows official non-thinking values except
+`presence_penalty`, which is calibrated for a JSON classification label:
 
 ```text
-temperature       = 0.7
-top_p             = 0.8
-top_k             = 20
-min_p             = 0.0
-presence_penalty  = 0.0   # official chat non-thinking is 1.5
-repetition_penalty= 1.0
+temperature       = 0.7   # official non-thinking
+top_p             = 0.8   # official non-thinking
+top_k             = 20    # official non-thinking
+min_p             = 0.0   # official non-thinking
+presence_penalty  = 0.0   # custom; official chat non-thinking is 1.5
+repetition_penalty= 1.0   # official non-thinking
 enable_thinking   = false
 ```
 
 The JSON Schema decodes `label` first, then `reason`. Official chat
 `presence_penalty=1.5` is for open-ended generation; it is the wrong prior
-for a three-way classification label, so this Judge uses `0.0`. All other
-non-thinking sampling values match the official README.
+for a three-way classification label. Do not describe this Judge as the
+official Qwen3.8 profile.
 
 The source is the model's local official README and generation configuration:
 
@@ -130,15 +131,21 @@ the model's strongest official profile and should be a separately
 calibrated ablation with a much larger `max_tokens`.
 
 A fixed request seed and server seed are used. Formal Judge serving
-enables SGLang batch-invariant deterministic inference by default, matching
-`judge.deterministic_inference=true` in the YAML. That flag is part of the
-run signature. Opt out only for throughput experiments:
+enables SGLang batch-invariant deterministic inference by default.
+`judge` queries SGLang `/server_info` before any request and refuses to
+run if `enable_deterministic_inference` or the served model name disagrees
+with the YAML. The verified snapshot is written to
+`runs/<run-name>/judge_server.json` and to every judgment row.
+
+Opt out only for throughput experiments, and change **both** the process
+flag and the YAML:
 
 ```bash
+# also set judge.deterministic_inference: false in the YAML, under a new run.name
 DETERMINISTIC_INFERENCE=0 bash scripts/serve_judge.sh
 ```
 
-This default can reduce throughput. A greedy Judge profile (`temperature=0`) should be treated as a separately calibrated ablation, not as the official Qwen3.8 profile.
+This default can reduce throughput. A greedy Judge profile (`temperature=0`) should be treated as a separately calibrated ablation.
 
 The Judge server uses TP=2, text-only model loading, CPU transport for unused
 multimodal features, and five concurrent requests. The five-request default
@@ -266,14 +273,11 @@ Paired metrics include:
 - exact McNemar p-values;
 - token-F1 and ROUGE context gains.
 
-Formal `score` requires exactly one judgment for every prepared example under
-all conditions listed in `generation.conditions`. Missing files, missing IDs,
-duplicate IDs, extra IDs, stale references, or mismatched generation hashes
-cause an error instead of silently shrinking to an intersection.
-
-`--condition all` follows that same YAML list. Condition-level metrics are
-emitted for every configured condition. The gold-versus-closed-book paired
-table is written only when both of those conditions are present and complete.
+Formal `score` requires the configured conditions to be exactly
+`gold` and `closed_book`, and exactly one judgment for every prepared
+example under both conditions. Missing files, missing IDs, duplicate IDs,
+extra IDs, stale references, or mismatched generation hashes cause an error
+instead of silently shrinking to an intersection.
 
 Incomplete smoke runs can be inspected with `status`, but `score` intentionally
 has no partial-data override.
