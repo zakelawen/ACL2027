@@ -244,8 +244,11 @@ A later full invocation under `main` is independent of `smoke`. vLLM is launched
 
 ```text
 temperature=0, top_p=1, top_k=0, min_p=0,
-presence_penalty=0, repetition_penalty=1, max_tokens=256
+presence_penalty=0, repetition_penalty=1, max_tokens=1024
 ```
+
+Generation fails closed if a completion is cut off at `max_tokens`. 256
+was too tight for some Full-Gold answers, so the formal budget is 1024.
 
 `serve_generator.sh` isolates compilers, `LIBRARY_PATH`, and
 `LD_LIBRARY_PATH` to the `ACL2027-vllm` env so FlashInfer JIT both

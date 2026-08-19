@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from tqdm import tqdm
 
-from .api import ChatClient, retry_async
+from .api import ChatClient, ChatCompletionError, retry_async
 from .runtime import (
     verify_generator_server,
     verify_model_identity,
@@ -29,6 +30,9 @@ from .prompts import (
     prompt_sha256,
 )
 from .validate import generation_parameters, validate_generation_rows
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 async def generate_answers(
@@ -126,28 +130,35 @@ async def _generate_condition(
                     {"role": "system", "content": GENERATION_SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
                 ]
-                result = await retry_async(
-                    lambda: client.chat(
-                        model=served_model,
-                        messages=messages,
-                        max_tokens=config.generation.max_tokens,
-                        temperature=config.generation.temperature,
-                        top_p=config.generation.top_p,
-                        seed=config.run.seed,
-                        presence_penalty=config.generation.presence_penalty,
-                        frequency_penalty=0.0,
-                        extra_body={
-                            "top_k": config.generation.top_k,
-                            "min_p": config.generation.min_p,
-                            "repetition_penalty": config.generation.repetition_penalty,
-                        },
-                    ),
-                    attempts=config.generation.max_retries,
-                    base_seconds=config.generation.retry_base_seconds,
-                    description=(
-                        f"generation {model_key}/{condition}/{example.example_id}"
-                    ),
-                )
+                try:
+                    result = await retry_async(
+                        lambda: client.chat(
+                            model=served_model,
+                            messages=messages,
+                            max_tokens=config.generation.max_tokens,
+                            temperature=config.generation.temperature,
+                            top_p=config.generation.top_p,
+                            seed=config.run.seed,
+                            presence_penalty=config.generation.presence_penalty,
+                            frequency_penalty=0.0,
+                            extra_body={
+                                "top_k": config.generation.top_k,
+                                "min_p": config.generation.min_p,
+                                "repetition_penalty": config.generation.repetition_penalty,
+                            },
+                        ),
+                        attempts=config.generation.max_retries,
+                        base_seconds=config.generation.retry_base_seconds,
+                        description=(
+                            f"generation {model_key}/{condition}/{example.example_id}"
+                        ),
+                    )
+                except ChatCompletionError as error:
+                    raise ChatCompletionError(
+                        f"{error} ({model_key}/{condition}/{example.example_id})",
+                        content=error.content,
+                        finish_reason=error.finish_reason,
+                    ) from error
                 return {
                     "example_id": example.example_id,
                     "source_sha256": record_sha256(example.model_dump(mode="json")),
@@ -173,6 +184,7 @@ async def _generate_condition(
         completed_in_scope = sum(
             example.example_id in done for example in examples
         )
+        failures: list[BaseException] = []
         with tqdm(
             total=len(examples),
             initial=completed_in_scope,
@@ -180,7 +192,18 @@ async def _generate_condition(
         ) as bar:
             try:
                 for future in asyncio.as_completed(tasks):
-                    row = await future
+                    try:
+                        row = await future
+                    except Exception as error:
+                        failures.append(error)
+                        LOGGER.error(
+                            "generation failed for %s/%s: %s",
+                            model_key,
+                            condition,
+                            error,
+                        )
+                        bar.update(1)
+                        continue
                     append_jsonl(output_path, row)
                     bar.update(1)
             except BaseException:
@@ -188,6 +211,14 @@ async def _generate_condition(
                     task.cancel()
                 await asyncio.gather(*tasks, return_exceptions=True)
                 raise
+
+        if failures:
+            preview = "; ".join(str(error) for error in failures[:8])
+            extra = "" if len(failures) <= 8 else f" (+{len(failures) - 8} more)"
+            raise RuntimeError(
+                f"{len(failures)} generation(s) failed for {model_key}/{condition}: "
+                f"{preview}{extra}"
+            )
 
         sort_jsonl(output_path, [example.example_id for example in all_examples])
         return output_path

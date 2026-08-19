@@ -21,6 +21,11 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.judge.presence_penalty, 0.0)
         self.assertEqual(config.judge.repetition_penalty, 1.0)
 
+    def test_generation_token_budget_covers_long_gold_answers(self) -> None:
+        config = load_config(CONFIG)
+        self.assertGreaterEqual(config.generation.max_tokens, 1024)
+        self.assertEqual(config.judge.max_tokens, 256)
+
     def test_paths_resolve_from_project_root(self) -> None:
         config = load_config(CONFIG)
         self.assertTrue(config.data.raw_path.is_absolute())
