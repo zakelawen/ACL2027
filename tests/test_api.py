@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from clapnq_eval.api import _is_retryable_error, retry_async
+from clapnq_eval.api import (
+    ChatCompletionError,
+    _is_retryable_error,
+    completed_chat_text,
+    retry_async,
+)
 
 
 class RetryTests(unittest.IsolatedAsyncioTestCase):
@@ -33,6 +38,31 @@ class RetryTests(unittest.IsolatedAsyncioTestCase):
         response = httpx.Response(503, request=request)
         self.assertTrue(_is_retryable_error(httpx.HTTPStatusError("busy", request=request, response=response)))
         self.assertFalse(_is_retryable_error(httpx.HTTPStatusError("bad", request=request, response=httpx.Response(400, request=request))))
+
+
+class CompletedTextTests(unittest.TestCase):
+    def test_stop_text_is_stripped(self) -> None:
+        self.assertEqual(
+            completed_chat_text("  answer  ", finish_reason="stop"),
+            "answer",
+        )
+
+    def test_truncated_generation_is_accepted_when_allowed(self) -> None:
+        text = completed_chat_text(
+            "partial answer",
+            finish_reason="length",
+            allow_truncated=True,
+        )
+        self.assertEqual(text, "partial answer")
+
+    def test_truncated_generation_is_rejected_by_default(self) -> None:
+        with self.assertRaises(ChatCompletionError) as ctx:
+            completed_chat_text("partial answer", finish_reason="length")
+        self.assertEqual(ctx.exception.finish_reason, "length")
+
+    def test_empty_truncated_text_is_rejected(self) -> None:
+        with self.assertRaises(ChatCompletionError):
+            completed_chat_text("   ", finish_reason="length", allow_truncated=True)
 
 
 if __name__ == "__main__":

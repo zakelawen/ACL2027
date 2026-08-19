@@ -146,6 +146,7 @@ async def _generate_condition(
                                 "min_p": config.generation.min_p,
                                 "repetition_penalty": config.generation.repetition_penalty,
                             },
+                            allow_truncated=True,
                         ),
                         attempts=config.generation.max_retries,
                         base_seconds=config.generation.retry_base_seconds,

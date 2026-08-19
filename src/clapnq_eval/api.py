@@ -53,6 +53,34 @@ class ChatResult:
         }
 
 
+
+def completed_chat_text(
+    text: str | None,
+    *,
+    finish_reason: str | None,
+    allow_truncated: bool = False,
+) -> str:
+    """Return usable completion text, or raise ChatCompletionError."""
+    if finish_reason == "length" and not allow_truncated:
+        raise ChatCompletionError(
+            "Chat completion was truncated at the token limit",
+            content=text,
+            finish_reason=finish_reason,
+        )
+    if text is None or not text.strip():
+        raise ChatCompletionError(
+            "Chat completion returned no text content",
+            content=text,
+            finish_reason=finish_reason,
+        )
+    if finish_reason == "length":
+        LOGGER.warning(
+            "Accepting truncated completion (%d chars, finish_reason=length)",
+            len(text),
+        )
+    return text.strip()
+
+
 def openai_compat_root(base_url: str) -> str:
     return str(base_url).rstrip("/").removesuffix("/v1")
 
@@ -155,6 +183,7 @@ class ChatClient:
         frequency_penalty: float = 0.0,
         response_format: dict[str, Any] | None = None,
         extra_body: dict[str, Any] | None = None,
+        allow_truncated: bool = False,
     ) -> ChatResult:
         request: dict[str, Any] = {
             "model": model,
@@ -186,22 +215,15 @@ class ChatClient:
         choice = response.choices[0]
         raw_content = choice.message.content
         text = raw_content if isinstance(raw_content, str) else None
-        if choice.finish_reason == "length":
-            raise ChatCompletionError(
-                "Chat completion was truncated at the token limit",
-                content=text,
-                finish_reason=choice.finish_reason,
-            )
-        if text is None:
-            raise ChatCompletionError(
-                "Chat completion returned no text content",
-                content=None,
-                finish_reason=choice.finish_reason,
-            )
+        text = completed_chat_text(
+            text,
+            finish_reason=choice.finish_reason,
+            allow_truncated=allow_truncated,
+        )
 
         usage = response.usage
         return ChatResult(
-            content=text.strip(),
+            content=text,
             finish_reason=choice.finish_reason,
             prompt_tokens=getattr(usage, "prompt_tokens", None),
             completion_tokens=getattr(usage, "completion_tokens", None),
