@@ -40,6 +40,22 @@ fi
 export PATH="${VLLM_ENV}/bin:${PATH}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
+# Isolate JIT/link from the caller conda env. run_experiment.sh is launched
+# from ACL2027-sglang, whose CC/CXX would compile FlashInfer against the
+# wrong libcuda (-lcuda not found).
+unset NVCC_PREPEND_FLAGS NVCC_APPEND_FLAGS
+VLLM_CC="${VLLM_ENV}/bin/x86_64-conda-linux-gnu-cc"
+VLLM_CXX="${VLLM_ENV}/bin/x86_64-conda-linux-gnu-c++"
+if [[ ! -x "${VLLM_CC}" || ! -x "${VLLM_CXX}" ]]; then
+  echo "vLLM compilers not found under ${VLLM_ENV}/bin" >&2
+  exit 1
+fi
+export CC="${VLLM_CC}"
+export CXX="${VLLM_CXX}"
+export LIBRARY_PATH="/usr/lib/x86_64-linux-gnu${LIBRARY_PATH:+:${LIBRARY_PATH}}"
+export FLASHINFER_WORKSPACE_BASE="${FLASHINFER_WORKSPACE_BASE:-${HOME}/.cache/flashinfer-workspaces/ACL2027-vllm}"
+mkdir -p "${FLASHINFER_WORKSPACE_BASE}"
+
 exec "${VLLM_BIN}" serve "${MODEL_PATH}" \
   --served-model-name "${SERVED_MODEL}" \
   --host "${BIND_HOST:-127.0.0.1}" \
