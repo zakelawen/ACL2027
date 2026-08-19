@@ -247,6 +247,12 @@ temperature=0, top_p=1, top_k=0, min_p=0,
 presence_penalty=0, repetition_penalty=1, max_tokens=256
 ```
 
+`serve_generator.sh` isolates compilers, `LIBRARY_PATH`, and
+`LD_LIBRARY_PATH` to the `ACL2027-vllm` env so FlashInfer JIT both
+compiles and loads against that env's libstdc++. The formal run is
+greedy, so FlashInfer's top-p/top-k sampler is off by default
+(`VLLM_USE_FLASHINFER_SAMPLER=0`).
+
 ## 3. Judge answers
 
 After generation is complete, stop the generator and start the two-GPU Judge:

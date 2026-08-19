@@ -56,6 +56,20 @@ export LIBRARY_PATH="/usr/lib/x86_64-linux-gnu${LIBRARY_PATH:+:${LIBRARY_PATH}}"
 export FLASHINFER_WORKSPACE_BASE="${FLASHINFER_WORKSPACE_BASE:-${HOME}/.cache/flashinfer-workspaces/ACL2027-vllm}"
 mkdir -p "${FLASHINFER_WORKSPACE_BASE}"
 
+# sampling.so is compiled against conda libstdc++ (GLIBCXX_3.4.32). The
+# system /lib/x86_64-linux-gnu/libstdc++.so.6 is 6.0.30 and cannot load it.
+# Prepend the vLLM env lib so the runtime linker finds conda's copy. Do not
+# add $VLLM_ENV/lib/stubs: that would hide the NVIDIA driver libcuda.
+if [[ ! -e "${VLLM_ENV}/lib/libstdc++.so.6" ]]; then
+  echo "vLLM libstdc++ not found: ${VLLM_ENV}/lib/libstdc++.so.6" >&2
+  exit 1
+fi
+export LD_LIBRARY_PATH="${VLLM_ENV}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
+# Formal run is greedy (temperature=0). FlashInfer top-p/top-k sampler is
+# unused and its JIT .so is what crashes warmup. Fall back to PyTorch/Triton.
+export VLLM_USE_FLASHINFER_SAMPLER="${VLLM_USE_FLASHINFER_SAMPLER:-0}"
+
 exec "${VLLM_BIN}" serve "${MODEL_PATH}" \
   --served-model-name "${SERVED_MODEL}" \
   --host "${BIND_HOST:-127.0.0.1}" \
