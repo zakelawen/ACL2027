@@ -6,8 +6,9 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${PROJECT_DIR}"
 
 PYTHON="${PYTHON:-/home/qluai/miniconda3/envs/ACL2027-sglang/bin/python}"
-GEN_HOST="${HOST:-127.0.0.1}"
-GEN_PORT="${PORT:-8000}"
+# Do not read $HOST: conda sets HOST=x86_64-conda-linux-gnu.
+GEN_HOST="${GEN_HOST:-127.0.0.1}"
+GEN_PORT="${GEN_PORT:-8000}"
 JUDGE_HOST="${JUDGE_HOST:-127.0.0.1}"
 JUDGE_PORT="${JUDGE_PORT:-18000}"
 GEN_GPU="${GEN_GPU:-0}"
@@ -34,7 +35,7 @@ Usage: bash scripts/run_experiment.sh [options]
   -h, --help
 
 Environment: GEN_GPU (default 0), JUDGE_GPU (default 0,1),
-WAIT_SECS (default 600), PYTHON, HOST, PORT, JUDGE_HOST, JUDGE_PORT.
+WAIT_SECS (default 600), PYTHON, GEN_HOST, GEN_PORT, JUDGE_HOST, JUDGE_PORT.
 EOF
 }
 
@@ -70,6 +71,7 @@ mkdir -p "${LOG_DIR}"
 
 GEN_PID=""
 JUDGE_PID=""
+TAIL_PID=""
 
 stop_pid() {
   local pid="${1:-}"
@@ -95,7 +97,16 @@ stop_pid() {
   fi
 }
 
+stop_tail() {
+  if [[ -n "${TAIL_PID}" ]] && kill -0 "${TAIL_PID}" 2>/dev/null; then
+    kill "${TAIL_PID}" 2>/dev/null || true
+    wait "${TAIL_PID}" 2>/dev/null || true
+  fi
+  TAIL_PID=""
+}
+
 cleanup() {
+  stop_tail
   stop_pid "${GEN_PID}" "generator"
   stop_pid "${JUDGE_PID}" "judge"
 }
@@ -104,16 +115,39 @@ trap cleanup EXIT INT TERM
 wait_http() {
   local url="$1"
   local name="$2"
+  local log="${3:-}"
   local deadline=$((SECONDS + WAIT_SECS))
   echo "Waiting for ${name} at ${url}"
+  if [[ -n "${log}" ]]; then
+    echo "---- ${name} log: ${log} ----"
+    touch "${log}"
+    tail -n +1 -F "${log}" &
+    TAIL_PID=$!
+  fi
   while (( SECONDS < deadline )); do
+    if [[ -n "${GEN_PID}" ]] && ! kill -0 "${GEN_PID}" 2>/dev/null; then
+      stop_tail
+      echo "${name} exited before becoming ready. See ${log}" >&2
+      return 1
+    fi
+    if [[ -n "${JUDGE_PID}" ]] && ! kill -0 "${JUDGE_PID}" 2>/dev/null && [[ "${name}" == judge ]]; then
+      stop_tail
+      echo "${name} exited before becoming ready. See ${log}" >&2
+      return 1
+    fi
     if curl -sf --max-time 2 "${url}" >/dev/null; then
-      echo "${name} is up"
+      stop_tail
+      echo "---- ${name} is up ----"
       return 0
     fi
     sleep 2
   done
+  stop_tail
   echo "Timed out waiting for ${name} (${WAIT_SECS}s): ${url}" >&2
+  if [[ -n "${log}" && -f "${log}" ]]; then
+    echo "---- last 80 lines of ${log} ----" >&2
+    tail -n 80 "${log}" >&2 || true
+  fi
   return 1
 }
 
@@ -125,11 +159,13 @@ fi
 if [[ "${DO_GENERATE}" == "1" ]]; then
   for model in "${MODELS[@]}"; do
     echo "=== generate ${model} ==="
-    CUDA_VISIBLE_DEVICES="${GEN_GPU}" \
+    local_log="${LOG_DIR}/generator.${model}.log"
+    BIND_HOST="${GEN_HOST}" BIND_PORT="${GEN_PORT}" \
+      CUDA_VISIBLE_DEVICES="${GEN_GPU}" \
       bash "${PROJECT_DIR}/scripts/serve_generator.sh" "${model}" \
-      > "${LOG_DIR}/generator.${model}.log" 2>&1 &
+      > "${local_log}" 2>&1 &
     GEN_PID=$!
-    wait_http "http://${GEN_HOST}:${GEN_PORT}/v1/models" "generator ${model}"
+    wait_http "http://${GEN_HOST}:${GEN_PORT}/v1/models" "generator ${model}" "${local_log}"
     "${CLI[@]}" generate --model "${model}"
     stop_pid "${GEN_PID}" "generator ${model}"
     GEN_PID=""
@@ -139,11 +175,12 @@ fi
 
 if [[ "${DO_JUDGE}" == "1" ]]; then
   echo "=== judge ==="
-  CUDA_VISIBLE_DEVICES="${JUDGE_GPU}" \
+  BIND_HOST="${JUDGE_HOST}" BIND_PORT="${JUDGE_PORT}" \
+    CUDA_VISIBLE_DEVICES="${JUDGE_GPU}" \
     bash "${PROJECT_DIR}/scripts/serve_judge.sh" \
     > "${LOG_DIR}/judge.log" 2>&1 &
   JUDGE_PID=$!
-  wait_http "http://${JUDGE_HOST}:${JUDGE_PORT}/v1/models" "judge"
+  wait_http "http://${JUDGE_HOST}:${JUDGE_PORT}/v1/models" "judge" "${LOG_DIR}/judge.log"
   "${CLI[@]}" judge --model all
   stop_pid "${JUDGE_PID}" "judge"
   JUDGE_PID=""

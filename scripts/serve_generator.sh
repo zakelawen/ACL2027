@@ -42,8 +42,8 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
 exec "${VLLM_BIN}" serve "${MODEL_PATH}" \
   --served-model-name "${SERVED_MODEL}" \
-  --host "${HOST:-127.0.0.1}" \
-  --port "${PORT:-8000}" \
+  --host "${BIND_HOST:-127.0.0.1}" \
+  --port "${BIND_PORT:-8000}" \
   --max-model-len "${MAX_MODEL_LEN:-8192}" \
   --max-num-seqs "${MAX_NUM_SEQS:-32}" \
   --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION:-0.90}" \

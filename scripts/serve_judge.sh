@@ -27,8 +27,8 @@ fi
 exec "${SGLANG_BIN}" serve \
   --model-path "${MODEL_PATH}" \
   --served-model-name qwen3.8-27b-judge \
-  --host "${HOST:-127.0.0.1}" \
-  --port "${PORT:-18000}" \
+  --host "${BIND_HOST:-127.0.0.1}" \
+  --port "${BIND_PORT:-18000}" \
   --tp-size 2 \
   --language-only \
   --mm-feature-transport cpu \
