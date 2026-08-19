@@ -70,6 +70,9 @@ class ReportTests(unittest.TestCase):
                 1,
             )
             self.assertEqual(paired[0]["strict_context_gain"], 1.0)
+            self.assertIn("exact_match_context_gain", paired[0])
+            self.assertIn("exact_match_context_gain_ci_low", paired[0])
+            self.assertIn("rouge1_f1_context_gain_ci_high", paired[0])
 
     def test_score_rejects_missing_judgment_ids(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -99,6 +102,28 @@ class ReportTests(unittest.TestCase):
             row["example_id"] = "unexpected-example"
             write_jsonl(path, [row])
             with self.assertRaisesRegex(RuntimeError, "Unexpected example_id"):
+                score_run(config)
+
+    def test_score_rejects_missing_judge_server_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config, example = self._config(Path(directory))
+            self._write_complete_conditions(config, example)
+            (config.run_dir / "judge_server.json").unlink()
+            with self.assertRaisesRegex(RuntimeError, "run-level Judge snapshot"):
+                score_run(config)
+
+    def test_score_rejects_mixed_judge_server_snapshots(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config, example = self._config(Path(directory))
+            self._write_complete_conditions(config, example)
+            path = config.run_dir / "judgments" / "test-model.closed_book.jsonl"
+            row = next(read_jsonl(path))
+            row["judge_server"] = {
+                **self._judge_server(config),
+                "random_seed": 7,
+            }
+            write_jsonl(path, [row])
+            with self.assertRaisesRegex(RuntimeError, "judge_server mismatch"):
                 score_run(config)
 
     def test_score_rejects_a_single_configured_condition(self) -> None:
@@ -161,10 +186,16 @@ class ReportTests(unittest.TestCase):
         config.run.name = "test"
         config.run.output_dir = root / "runs"
         config.data.normalized_path = root / "data.jsonl"
-        config.models = {"test-model": ModelConfig(served_model="served-model")}
+        config.models = {
+            "test-model": ModelConfig(
+                served_model="served-model",
+                model_path=root / "fake-model",
+            )
+        }
         config.generation.conditions = ["gold", "closed_book"]
         config.metrics.bootstrap_samples = 100
         config.metrics.allow_rouge_fallback = True
+        self._write_snapshot(config)
 
         example = Example(
             example_id="example-1",
@@ -197,6 +228,7 @@ class ReportTests(unittest.TestCase):
             "source_sha256": record_sha256(example.model_dump(mode="json")),
             "model": "test-model",
             "served_model": "served-model",
+            "model_path": str(config.models["test-model"].model_path),
             "condition": condition,
             "question": example.question,
             "references": example.references,
@@ -240,6 +272,7 @@ class ReportTests(unittest.TestCase):
                 judge_prompt,
             ),
             "judge_parameters": judge_parameters(config),
+            "judge_server": self._judge_server(config),
         }
         judgment_path = (
             config.run_dir
@@ -247,6 +280,23 @@ class ReportTests(unittest.TestCase):
             / f"test-model.{condition}.jsonl"
         )
         write_jsonl(judgment_path, [judgment])
+
+    def _judge_server(self, config: ExperimentConfig) -> dict[str, object]:
+        return {
+            "enable_deterministic_inference": True,
+            "sglang_version": config.judge.sglang_version,
+            "model_path": str(config.judge.model_path),
+            "served_model_name": config.judge.served_model,
+            "random_seed": config.run.seed,
+        }
+
+    def _write_snapshot(self, config: ExperimentConfig) -> None:
+        path = config.run_dir / "judge_server.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(self._judge_server(config), sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
 
 
 if __name__ == "__main__":

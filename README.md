@@ -92,7 +92,7 @@ settings under an existing signed run is rejected before inference. Use
 
 This is a **custom structured-judge profile**, not the official Qwen3.8
 chat profile. Sampling follows official non-thinking values except
-`presence_penalty`, which is calibrated for a JSON classification label:
+`presence_penalty`, which is a custom choice for a JSON classification label:
 
 ```text
 temperature       = 0.7   # official non-thinking
@@ -133,9 +133,13 @@ calibrated ablation with a much larger `max_tokens`.
 A fixed request seed and server seed are used. Formal Judge serving
 enables SGLang batch-invariant deterministic inference by default.
 `judge` queries SGLang `/server_info` before any request and refuses to
-run if `enable_deterministic_inference` or the served model name disagrees
-with the YAML. The verified snapshot is written to
-`runs/<run-name>/judge_server.json` and to every judgment row.
+run unless deterministic mode, served name, `model_path`, `random_seed`
+(`run.seed`), and `sglang_version` all match the YAML. The verified
+snapshot is created once at `runs/<run-name>/judge_server.json` and must
+remain byte-for-byte identical for the rest of the run. Formal `score`
+requires that file and requires every judgment row to carry the same
+snapshot. A later Judge process that differs is rejected and does not
+overwrite the snapshot.
 
 Opt out only for throughput experiments, and change **both** the process
 flag and the YAML:
@@ -259,7 +263,7 @@ Condition-level metrics include:
 - strict Judge accuracy;
 - non-major rate;
 - label counts;
-- normalized EM and token-F1;
+- normalized EM and token-F1 (SQuAD punctuation deletion);
 - ROUGE-1 recall/F1 and ROUGE-L F1, taking the maximum over references;
 - candidate length and candidate/reference length ratio;
 - optional BERTScore-F1.
@@ -271,7 +275,7 @@ Paired metrics include:
 - the complete `3 x 3` Closed-book-to-Gold label transition matrix;
 - paired-bootstrap confidence intervals;
 - exact McNemar p-values;
-- token-F1 and ROUGE context gains.
+- token-F1, EM, and ROUGE context gains with paired-bootstrap CIs.
 
 Formal `score` requires the configured conditions to be exactly
 `gold` and `closed_book`, and exactly one judgment for every prepared

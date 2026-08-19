@@ -15,6 +15,7 @@ from .config import ExperimentConfig
 from .data import Example, load_examples
 from .io import read_jsonl, write_jsonl
 from .metrics import compute_bertscore_f1, score_references
+from .runtime import load_judge_server_snapshot
 from .validate import (
     validate_generation_rows,
     validate_judgment_row,
@@ -120,6 +121,8 @@ def _load_and_validate_inputs(
             f"configured conditions are {sorted(configured_conditions)}"
         )
 
+    judge_server = load_judge_server_snapshot(config)
+
     expected_ids = set(examples_by_id)
     judgment_dir = config.run_dir / "judgments"
     generation_dir = config.run_dir / "generations"
@@ -200,6 +203,7 @@ def _load_and_validate_inputs(
                     condition=condition,
                     path=judgment_path,
                     generation_path=generation_path,
+                    server=judge_server,
                     context="input",
                 )
 
@@ -395,18 +399,30 @@ def _paired_summaries(
                 )
                 summary[key] = transitions[(closed_label, gold_label)]
 
-        for metric in ("token_f1", "rouge_l_f1", "rouge1_recall"):
+        lexical_metrics = [
+            "exact_match",
+            "token_f1",
+            "rouge1_recall",
+            "rouge1_f1",
+            "rouge_l_f1",
+        ]
+        if "bertscore_f1" in gold[common[0]] and "bertscore_f1" in closed[common[0]]:
+            lexical_metrics.append("bertscore_f1")
+        for offset, metric in enumerate(lexical_metrics):
             gold_values = np.asarray([float(gold[key][metric]) for key in common])
             closed_values = np.asarray([float(closed[key][metric]) for key in common])
             summary[f"{metric}_context_gain"] = float(
                 np.mean(gold_values - closed_values)
             )
-        if "bertscore_f1" in gold[common[0]] and "bertscore_f1" in closed[common[0]]:
-            gold_values = np.asarray([float(gold[key]["bertscore_f1"]) for key in common])
-            closed_values = np.asarray([float(closed[key]["bertscore_f1"]) for key in common])
-            summary["bertscore_f1_context_gain"] = float(
-                np.mean(gold_values - closed_values)
+            low, high = paired_bootstrap_interval(
+                gold_values,
+                closed_values,
+                samples=bootstrap_samples,
+                confidence_level=confidence_level,
+                seed=model_seed + 10 + offset,
             )
+            summary[f"{metric}_context_gain_ci_low"] = low
+            summary[f"{metric}_context_gain_ci_high"] = high
         summaries.append(summary)
     return summaries
 

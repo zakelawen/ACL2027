@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from clapnq_eval.api import retry_async
+from clapnq_eval.api import _is_retryable_error, retry_async
 
 
 class RetryTests(unittest.IsolatedAsyncioTestCase):
@@ -22,6 +22,17 @@ class RetryTests(unittest.IsolatedAsyncioTestCase):
                 description="validation",
             )
         self.assertEqual(calls, 1)
+
+    def test_httpx_connection_errors_are_retryable(self) -> None:
+        import httpx
+
+        self.assertTrue(
+            _is_retryable_error(httpx.ConnectError("connection refused"))
+        )
+        request = httpx.Request("GET", "http://127.0.0.1/server_info")
+        response = httpx.Response(503, request=request)
+        self.assertTrue(_is_retryable_error(httpx.HTTPStatusError("busy", request=request, response=response)))
+        self.assertFalse(_is_retryable_error(httpx.HTTPStatusError("bad", request=request, response=httpx.Response(400, request=request))))
 
 
 if __name__ == "__main__":

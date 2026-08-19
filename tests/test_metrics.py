@@ -11,6 +11,8 @@ from clapnq_eval.report import exact_mcnemar_p, paired_bootstrap_interval
 class MetricTests(unittest.TestCase):
     def test_normalized_exact_match(self) -> None:
         self.assertEqual(exact_match("The Eiffel Tower!", "eiffel tower"), 1.0)
+        self.assertEqual(exact_match("U.S.", "US"), 1.0)
+        self.assertEqual(exact_match("pre-existing", "preexisting"), 1.0)
 
     def test_token_f1_partial_overlap(self) -> None:
         self.assertGreater(token_f1("alpha beta", "alpha gamma"), 0.0)

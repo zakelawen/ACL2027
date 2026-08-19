@@ -49,6 +49,7 @@ class RunConfig(StrictModel):
 
 class ModelConfig(StrictModel):
     served_model: str
+    model_path: Path
 
 
 class RequestConfig(StrictModel):
@@ -80,6 +81,8 @@ class GenerationConfig(RequestConfig):
 
 class JudgeConfig(RequestConfig):
     served_model: str
+    model_path: Path
+    sglang_version: str
     enable_thinking: bool = False
     deterministic_inference: bool = True
     temperature: float = Field(default=0.7, ge=0)
@@ -124,6 +127,9 @@ def load_config(path: str | Path) -> ExperimentConfig:
     config.data.raw_path = _resolve(project_root, config.data.raw_path)
     config.data.normalized_path = _resolve(project_root, config.data.normalized_path)
     config.run.output_dir = _resolve(project_root, config.run.output_dir)
+    config.judge.model_path = _resolve(project_root, config.judge.model_path)
+    for model in config.models.values():
+        model.model_path = _resolve(project_root, model.model_path)
     return config
 
 

@@ -15,7 +15,6 @@ from .prompts import (
     build_judge_user_prompt,
     prompt_sha256,
 )
-from .runtime import judge_server_matches_config
 from .schema import JudgeResult
 
 
@@ -59,7 +58,8 @@ def validate_generation_rows(
     context: Literal["resume", "input"] = "input",
 ) -> None:
     seen: set[str] = set()
-    resolved_model = served_model or config.models[model_key].served_model
+    model_config = config.models[model_key]
+    resolved_model = served_model or model_config.served_model
     parameters = generation_parameters(config)
     for row in rows:
         example_id = str(row.get("example_id", ""))
@@ -82,6 +82,7 @@ def validate_generation_rows(
             "source_sha256": record_sha256(example.model_dump(mode="json")),
             "model": model_key,
             "served_model": resolved_model,
+            "model_path": str(model_config.model_path),
             "condition": condition,
             "question": example.question,
             "references": example.references,
@@ -235,11 +236,10 @@ def _validate_judge_server(
             )
         return
     if recorded is None:
-        return
-    if not isinstance(recorded, dict) or not judge_server_matches_config(
-        config, recorded
-    ):
         raise RuntimeError(
-            f"Invalid judgment {path}: judge_server does not match the YAML "
-            f"for {example_id}"
+            f"Invalid judgment {path}: missing judge_server for {example_id}"
         )
+    raise RuntimeError(
+        f"Invalid judgment {path}: judge_server present without a run-level snapshot "
+        f"for {example_id}"
+    )

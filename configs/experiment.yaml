@@ -14,10 +14,13 @@ run:
 models:
   qwen2.5-7b:
     served_model: qwen2.5-7b
+    model_path: /mnt/model/Qwen2.5-7B-Instruct
   llama3.1-8b:
     served_model: llama3.1-8b
+    model_path: /mnt/model/Meta-Llama-3.1-8B-Instruct
   mistral-7b:
     served_model: mistral-7b
+    model_path: /mnt/model/Mistral-7B-Instruct-v0.3
 
 generation:
   base_url: http://127.0.0.1:8000/v1
@@ -39,6 +42,8 @@ judge:
   base_url: http://127.0.0.1:18000/v1
   api_key: EMPTY
   served_model: qwen3.8-27b-judge
+  model_path: /home/qluai/.cache/modelscope/hub/models/Qwen/Qwen3___8-27B-FP8
+  sglang_version: "0.5.17"
   enable_thinking: false
   deterministic_inference: true
 

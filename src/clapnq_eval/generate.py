@@ -8,6 +8,7 @@ from typing import Any
 from tqdm import tqdm
 
 from .api import ChatClient, retry_async
+from .runtime import verify_generator_server
 from .config import Condition, ExperimentConfig
 from .data import Example, load_examples
 from .io import (
@@ -57,6 +58,7 @@ async def generate_answers(
             base_seconds=config.generation.retry_base_seconds,
             description=f"generator server check for {served_model}",
         )
+        await _verify_live_generator(config, client, model_key, served_model)
         outputs: list[Path] = []
         for condition in conditions:
             output = await _generate_condition(
@@ -147,6 +149,7 @@ async def _generate_condition(
                     "source_sha256": record_sha256(example.model_dump(mode="json")),
                     "model": model_key,
                     "served_model": served_model,
+                    "model_path": str(config.models[model_key].model_path),
                     "condition": condition,
                     "question": example.question,
                     "references": example.references,
@@ -184,3 +187,23 @@ async def _generate_condition(
 
         sort_jsonl(output_path, [example.example_id for example in all_examples])
         return output_path
+
+
+async def _verify_live_generator(
+    config: ExperimentConfig,
+    client: ChatClient,
+    model_key: str,
+    served_model: str,
+) -> None:
+    info: dict[str, Any] | None = None
+    try:
+        info = await client.get_server_info()
+    except RuntimeError:
+        info = None
+    card = await client.get_model_card(served_model)
+    verify_generator_server(
+        expected_path=config.models[model_key].model_path,
+        served_model=served_model,
+        info=info,
+        model_card=card,
+    )

@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from tqdm import tqdm
 
 from .api import ChatClient, ChatCompletionError, retry_async
-from .runtime import verify_judge_server
+from .runtime import ensure_judge_server_snapshot, verify_judge_server
 from .config import Condition, ExperimentConfig
 from .data import Example, load_examples
 from .io import (
@@ -107,7 +107,7 @@ async def judge_answers(
             description="judge /server_info",
         )
         server = verify_judge_server(config, info)
-        _write_judge_server_snapshot(config, server)
+        server = ensure_judge_server_snapshot(config, server)
         outputs: list[Path] = []
         for model_key in model_keys:
             for condition in conditions:
@@ -340,17 +340,3 @@ async def _judge_file(
                 failed_path,
             )
         return output_path, failed_path
-
-
-def _write_judge_server_snapshot(
-    config: ExperimentConfig, server: dict[str, Any]
-) -> Path:
-    config.run_dir.mkdir(parents=True, exist_ok=True)
-    path = config.run_dir / "judge_server.json"
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(server, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    temporary.replace(path)
-    return path

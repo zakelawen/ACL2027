@@ -60,6 +60,7 @@ def openai_compat_root(base_url: str) -> str:
 class ChatClient:
     def __init__(self, *, base_url: str, api_key: str, timeout_seconds: float) -> None:
         self._base_url = base_url
+        self._api_key = api_key
         self._timeout_seconds = timeout_seconds
         self._client = AsyncOpenAI(
             base_url=base_url,
@@ -82,11 +83,18 @@ class ChatClient:
         import httpx
 
         root = openai_compat_root(self._base_url)
+        headers: dict[str, str] = {}
+        if self._api_key and self._api_key != "EMPTY":
+            headers["Authorization"] = f"Bearer {self._api_key}"
         last_status: int | None = None
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as http:
+        async with httpx.AsyncClient(
+            timeout=self._timeout_seconds, headers=headers
+        ) as http:
             for path in ("/server_info", "/get_server_info"):
                 response = await http.get(root + path)
                 last_status = response.status_code
+                if response.status_code >= 500:
+                    response.raise_for_status()
                 if response.status_code != 200:
                     continue
                 payload = response.json()
@@ -98,6 +106,16 @@ class ChatClient:
         raise RuntimeError(
             f"Judge /server_info is unavailable (HTTP {last_status})"
         )
+
+    async def get_model_card(self, model: str) -> dict[str, Any]:
+        response = await self._client.models.list()
+        for item in response.data:
+            if item.id != model:
+                continue
+            if hasattr(item, "model_dump"):
+                return item.model_dump()
+            return dict(item)
+        return {}
 
     async def chat(
         self,
@@ -204,5 +222,11 @@ def _is_retryable_error(error: Exception) -> bool:
         return True
     if isinstance(error, APIStatusError):
         return error.status_code in {408, 409, 425, 429, 500, 502, 503, 504}
-    return False
+    try:
+        import httpx
+    except ImportError:
+        return False
+    if isinstance(error, httpx.HTTPStatusError):
+        return error.response.status_code in {408, 409, 425, 429, 500, 502, 503, 504}
+    return isinstance(error, httpx.RequestError)
 

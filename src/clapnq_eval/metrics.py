@@ -25,8 +25,10 @@ _ROUGE = (
 
 
 def normalize_answer(text: str) -> str:
+    # SQuAD-style: drop punctuation rather than replacing it with spaces so
+    # "U.S."/"US" and "pre-existing"/"preexisting" match.
     text = unicodedata.normalize("NFKC", str(text)).casefold()
-    text = "".join(" " if _is_punctuation(char) else char for char in text)
+    text = "".join(char for char in text if not _is_punctuation(char))
     text = _ARTICLES.sub(" ", text)
     return " ".join(text.split())
 
