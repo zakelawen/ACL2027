@@ -32,13 +32,13 @@ exec "${SGLANG_BIN}" serve \
   --tp-size 2 \
   --language-only \
   --mm-feature-transport cpu \
-  --context-length "${CONTEXT_LENGTH:-8192}" \
+  --context-length "${CONTEXT_LENGTH:-16384}" \
   --mem-fraction-static "${MEM_FRACTION_STATIC:-0.88}" \
   --max-running-requests "${MAX_RUNNING_REQUESTS:-5}" \
   --grammar-backend xgrammar \
   --reasoning-parser qwen3 \
   --sampling-defaults openai \
-  --default-chat-template-kwargs '{"enable_thinking": false}' \
+  --default-chat-template-kwargs '{"enable_thinking": true}' \
   --random-seed "${SEED:-20260819}" \
   --enable-p2p-check \
   --disable-custom-all-reduce \

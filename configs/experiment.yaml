@@ -74,7 +74,7 @@ judge:
   served_model: qwen3.8-27b-judge
   model_path: /home/qluai/.cache/modelscope/hub/models/Qwen/Qwen3___8-27B-FP8
   sglang_version: "0.5.17"
-  enable_thinking: false
+  enable_thinking: true
   deterministic_inference: true
   model_identity:
     weight_manifest_sha256: 6276c8fdf804a33628fd4705098bc5e6aafcacd28ca0fa4af9c07bae0eb75d2b
@@ -87,19 +87,20 @@ judge:
       preprocessor_config.json: 27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516
       model.safetensors.index.json: f0838c766951bdfe76d6afbdb2771a8f67aaa2231dedb3d33cebd817729843a2
 
-  # Custom structured-judge profile: official non-thinking sampling
-  # except presence_penalty. Official chat non-thinking uses 1.5; this
-  # Judge uses 0.0 because the schema emits a classification label.
-  temperature: 0.7
-  top_p: 0.8
+  # Official Qwen3.8 thinking profile from the checkpoint README
+  # and generation_config.json (temperature/top_p/top_k).
+  temperature: 1.0
+  top_p: 0.95
   top_k: 20
   min_p: 0.0
   presence_penalty: 0.0
   repetition_penalty: 1.0
 
-  max_tokens: 256
+  # Think tokens plus the JSON label/reason. 256 truncated the
+  # non-thinking Judge; thinking needs a much larger budget.
+  max_tokens: 4096
   concurrency: 5
-  request_timeout_seconds: 180
+  request_timeout_seconds: 300
   max_retries: 5
   retry_base_seconds: 1.0
 

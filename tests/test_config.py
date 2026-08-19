@@ -12,19 +12,20 @@ CONFIG = Path(__file__).parents[1] / "configs" / "experiment.yaml"
 class ConfigTests(unittest.TestCase):
     def test_structured_judge_sampling_profile(self) -> None:
         config = load_config(CONFIG)
-        self.assertFalse(config.judge.enable_thinking)
+        self.assertTrue(config.judge.enable_thinking)
         self.assertTrue(config.judge.deterministic_inference)
-        self.assertEqual(config.judge.temperature, 0.7)
-        self.assertEqual(config.judge.top_p, 0.8)
+        self.assertEqual(config.judge.temperature, 1.0)
+        self.assertEqual(config.judge.top_p, 0.95)
         self.assertEqual(config.judge.top_k, 20)
         self.assertEqual(config.judge.min_p, 0.0)
         self.assertEqual(config.judge.presence_penalty, 0.0)
         self.assertEqual(config.judge.repetition_penalty, 1.0)
+        self.assertGreaterEqual(config.judge.max_tokens, 4096)
 
     def test_generation_token_budget_covers_long_gold_answers(self) -> None:
         config = load_config(CONFIG)
         self.assertGreaterEqual(config.generation.max_tokens, 1024)
-        self.assertEqual(config.judge.max_tokens, 256)
+        self.assertGreaterEqual(config.judge.max_tokens, 4096)
 
     def test_paths_resolve_from_project_root(self) -> None:
         config = load_config(CONFIG)

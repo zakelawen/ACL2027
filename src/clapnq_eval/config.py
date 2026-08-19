@@ -112,15 +112,13 @@ class JudgeConfig(RequestConfig):
     model_path: Path
     sglang_version: str
     model_identity: ModelIdentity
-    enable_thinking: bool = False
+    enable_thinking: bool = True
     deterministic_inference: bool = True
-    temperature: float = Field(default=0.7, ge=0)
-    top_p: float = Field(default=0.8, gt=0, le=1)
+    temperature: float = Field(default=1.0, ge=0)
+    top_p: float = Field(default=0.95, gt=0, le=1)
     top_k: int = Field(default=20, ge=0)
     min_p: float = Field(default=0.0, ge=0, le=1)
-    # Official chat non-thinking uses 1.5. The Judge decodes a JSON label
-    # first, then a short reason; a chat-style presence penalty is the
-    # wrong prior for that schema, so this stays 0.0.
+    # Official Qwen3.8 thinking uses presence_penalty=0.0.
     presence_penalty: float = 0.0
     repetition_penalty: float = Field(default=1.0, gt=0)
 

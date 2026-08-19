@@ -90,24 +90,24 @@ settings under an existing signed run is rejected before inference. Use
 
 ## Judge parameters
 
-This is a **custom structured-judge profile**, not the official Qwen3.8
-chat profile. Sampling follows official non-thinking values except
-`presence_penalty`, which is a custom choice for a JSON classification label:
+This Judge uses the **official Qwen3.8 thinking** sampling profile from
+the checkpoint README and `generation_config.json`:
 
 ```text
-temperature       = 0.7   # official non-thinking
-top_p             = 0.8   # official non-thinking
-top_k             = 20    # official non-thinking
-min_p             = 0.0   # official non-thinking
-presence_penalty  = 0.0   # custom; official chat non-thinking is 1.5
-repetition_penalty= 1.0   # official non-thinking
-enable_thinking   = false
+temperature       = 1.0   # official thinking
+top_p             = 0.95  # official thinking
+top_k             = 20    # official thinking
+min_p             = 0.0   # official thinking
+presence_penalty  = 0.0   # official thinking
+repetition_penalty= 1.0   # official thinking
+enable_thinking   = true
+max_tokens        = 4096  # think tokens + JSON label/reason
 ```
 
-The JSON Schema decodes `label` first, then `reason`. Official chat
-`presence_penalty=1.5` is for open-ended generation; it is the wrong prior
-for a three-way classification label. Do not describe this Judge as the
-official Qwen3.8 profile.
+SGLang is launched with `--reasoning-parser qwen3`, so thinking is free-form
+and the JSON Schema is applied only after `</think>`. Non-thinking
+(`enable_thinking=false`, temperature=0.7, top_p=0.8, presence_penalty=1.5)
+is a separately calibrated ablation.
 
 The source is the model's local official README and generation configuration:
 
@@ -123,12 +123,10 @@ revision     = 017b9c7af6b5689d5dd426a76e0bc077eb5ca20a
 lastModified = 2026-08-14
 ```
 
-The checkpoint's `generation_config.json` describes its thinking-enabled
-default. This evaluation deliberately uses non-thinking inference: every
-SGLang Judge request sets
-`extra_body.chat_template_kwargs.enable_thinking=false`. Thinking mode is
-the model's strongest official profile and should be a separately
-calibrated ablation with a much larger `max_tokens`.
+The checkpoint's `generation_config.json` is the thinking-enabled default.
+Every Judge request sets
+`extra_body.chat_template_kwargs.enable_thinking=true`, matching the
+server default in `serve_judge.sh`.
 
 A fixed request seed and server seed are used. Formal Judge serving
 enables SGLang batch-invariant deterministic inference by default.
