@@ -101,7 +101,7 @@ min_p             = 0.0   # official thinking
 presence_penalty  = 0.0   # official thinking
 repetition_penalty= 1.0   # official thinking
 enable_thinking   = true
-max_tokens        = 4096  # think tokens + JSON label/reason
+max_tokens        = 8192  # think tokens + JSON label/reason
 ```
 
 SGLang is launched with `--reasoning-parser qwen3`, so thinking is free-form

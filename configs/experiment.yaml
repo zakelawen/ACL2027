@@ -96,11 +96,11 @@ judge:
   presence_penalty: 0.0
   repetition_penalty: 1.0
 
-  # Think tokens plus the JSON label/reason. 256 truncated the
-  # non-thinking Judge; thinking needs a much larger budget.
-  max_tokens: 4096
+  # Think tokens plus the JSON label/reason. 4096 still truncated
+  # 51 thinking traces; successful rows already reach ~4091.
+  max_tokens: 8192
   concurrency: 5
-  request_timeout_seconds: 300
+  request_timeout_seconds: 600
   max_retries: 5
   retry_base_seconds: 1.0
 
