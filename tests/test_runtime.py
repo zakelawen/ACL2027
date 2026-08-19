@@ -8,9 +8,13 @@ from pathlib import Path
 from clapnq_eval.config import load_config
 from clapnq_eval.runtime import (
     ensure_judge_server_snapshot,
+    hash_model_identity,
+    require_bool,
     summarize_judge_server,
     verify_generator_server,
     verify_judge_server,
+    verify_model_identity,
+    verify_recorded_judge_server,
 )
 
 
@@ -103,6 +107,38 @@ class RuntimeTests(unittest.TestCase):
                 info=None,
                 model_card={"root": "/tmp/other-weights"},
             )
+
+    def test_generator_rejects_missing_path_evidence(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "did not report a model path"):
+            verify_generator_server(
+                expected_path=Path("/mnt/model/Qwen2.5-7B-Instruct"),
+                served_model="qwen2.5-7b",
+                info=None,
+                model_card={},
+            )
+
+    def test_bool_strings_are_rejected(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "must be a boolean"):
+            require_bool("false", "enable_deterministic_inference")
+
+    def test_recorded_snapshot_must_match_yaml(self) -> None:
+        config = load_config(CONFIG)
+        snapshot = verify_judge_server(config, _info(config))
+        snapshot["random_seed"] = 7
+        with self.assertRaisesRegex(RuntimeError, "random_seed"):
+            verify_recorded_judge_server(config, snapshot)
+
+    def test_model_identity_detects_file_change(self) -> None:
+        config = load_config(CONFIG)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.json").write_text("{}", encoding="utf-8")
+            actual = hash_model_identity(root)
+            identity = config.judge.model_identity.model_copy(
+                update={"files": {"config.json": actual["files"]["config.json"]}}
+            )
+            with self.assertRaisesRegex(RuntimeError, "Weight manifest mismatch"):
+                verify_model_identity(root, identity)
 
 
 if __name__ == "__main__":

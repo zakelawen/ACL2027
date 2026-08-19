@@ -117,6 +117,31 @@ class ChatClient:
             return dict(item)
         return {}
 
+    async def get_engine_version(self) -> str:
+        payload = await self._get_json("/version")
+        if isinstance(payload, dict):
+            version = payload.get("version") or payload.get("vllm_version")
+            if version:
+                return str(version)
+        raise RuntimeError("Engine /version did not report a version string")
+
+    async def _get_json(self, path: str) -> Any:
+        import httpx
+
+        root = openai_compat_root(self._base_url)
+        headers: dict[str, str] = {}
+        if self._api_key and self._api_key != "EMPTY":
+            headers["Authorization"] = f"Bearer {self._api_key}"
+        async with httpx.AsyncClient(
+            timeout=self._timeout_seconds, headers=headers
+        ) as http:
+            response = await http.get(root + path)
+            if response.status_code >= 500:
+                response.raise_for_status()
+            if response.status_code != 200:
+                raise RuntimeError(f"GET {path} failed (HTTP {response.status_code})")
+            return response.json()
+
     async def chat(
         self,
         *,

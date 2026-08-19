@@ -143,7 +143,7 @@ def compute_bertscore_f1(
         model_type=model_type,
         verbose=True,
     )
-    maxima = [0.0] * len(candidates)
+    maxima = [float("-inf")] * len(candidates)
     for owner, value in zip(owners, f1.tolist()):
         maxima[owner] = max(maxima[owner], float(value))
     return maxima

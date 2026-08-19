@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
-from .config import ExperimentConfig
+from .config import ExperimentConfig, ModelIdentity
 from .io import exclusive_output_lock, read_jsonl
 
 
@@ -23,6 +24,16 @@ _SERVER_INFO_KEYS = (
     "port",
 )
 
+_IDENTITY_FILES = (
+    "config.json",
+    "generation_config.json",
+    "tokenizer_config.json",
+    "tokenizer.json",
+    "chat_template.jinja",
+    "preprocessor_config.json",
+    "model.safetensors.index.json",
+)
+
 
 def paths_equal(left: str | Path, right: str | Path) -> bool:
     first = Path(left).expanduser()
@@ -31,6 +42,74 @@ def paths_equal(left: str | Path, right: str | Path) -> bool:
         return first.resolve() == second.resolve()
     except OSError:
         return first.as_posix() == second.as_posix()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def hash_model_identity(model_path: str | Path) -> dict[str, Any]:
+    root = Path(model_path)
+    files: dict[str, str] = {}
+    for name in _IDENTITY_FILES:
+        candidate = root / name
+        if candidate.is_file():
+            files[name] = sha256_file(candidate)
+    shards = sorted(path for path in root.glob("*.safetensors") if path.is_file())
+    manifest = [
+        {"name": path.name, "size": path.stat().st_size} for path in shards
+    ]
+    payload = json.dumps(manifest, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return {
+        "files": files,
+        "weight_manifest_sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def verify_model_identity(model_path: str | Path, expected: ModelIdentity) -> dict[str, Any]:
+    actual = hash_model_identity(model_path)
+    missing = [name for name in expected.files if name not in actual["files"]]
+    if missing:
+        raise RuntimeError(
+            f"Model identity files missing under {model_path}: {missing}"
+        )
+    mismatched = [
+        name
+        for name, digest in expected.files.items()
+        if actual["files"][name] != digest
+    ]
+    if mismatched:
+        raise RuntimeError(
+            f"Model identity hash mismatch under {model_path}: {mismatched}"
+        )
+    if actual["weight_manifest_sha256"] != expected.weight_manifest_sha256:
+        raise RuntimeError(
+            f"Weight manifest mismatch under {model_path}: "
+            f"{actual['weight_manifest_sha256']} != {expected.weight_manifest_sha256}"
+        )
+    return actual
+
+
+def versions_match(reported: str, expected: str) -> bool:
+    left = str(reported).strip()
+    right = str(expected).strip()
+    return left == right or left.startswith(right) or right.startswith(left)
+
+
+def require_bool(value: Any, name: str) -> bool:
+    if value is True or value is False:
+        return value
+    raise RuntimeError(f"{name} must be a boolean, got {value!r}")
+
+
+def require_int(value: Any, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise RuntimeError(f"{name} must be an integer, got {value!r}")
+    return value
 
 
 def summarize_judge_server(info: dict[str, Any]) -> dict[str, Any]:
@@ -53,12 +132,15 @@ def verify_judge_server(
             "Judge /server_info did not report enable_deterministic_inference. "
             "Cannot confirm the running server matches judge.deterministic_inference."
         )
-    actual = bool(summary["enable_deterministic_inference"])
-    expected = bool(config.judge.deterministic_inference)
-    if actual != expected:
+    actual = require_bool(
+        summary["enable_deterministic_inference"],
+        "enable_deterministic_inference",
+    )
+    if actual != config.judge.deterministic_inference:
         raise RuntimeError(
             f"Judge server enable_deterministic_inference={actual} "
-            f"does not match judge.deterministic_inference={expected}. "
+            f"does not match judge.deterministic_inference="
+            f"{config.judge.deterministic_inference}. "
             "Restart scripts/serve_judge.sh so the process flag matches the YAML "
             "(default on; use DETERMINISTIC_INFERENCE=0 only when the YAML is false)."
         )
@@ -76,17 +158,17 @@ def verify_judge_server(
             f"{expected_name!r}."
         )
 
-    reported_seed = summary.get("random_seed")
-    if reported_seed is None:
+    if "random_seed" not in summary:
         raise RuntimeError("Judge /server_info did not report random_seed.")
-    if int(reported_seed) != int(config.run.seed):
+    reported_seed = require_int(summary["random_seed"], "random_seed")
+    if reported_seed != int(config.run.seed):
         raise RuntimeError(
             f"Judge server random_seed={reported_seed} does not match "
             f"run.seed={config.run.seed}."
         )
 
     reported_path = summary.get("model_path")
-    if not reported_path:
+    if not reported_path or not isinstance(reported_path, str):
         raise RuntimeError("Judge /server_info did not report model_path.")
     if not paths_equal(reported_path, config.judge.model_path):
         raise RuntimeError(
@@ -95,14 +177,37 @@ def verify_judge_server(
         )
 
     reported_version = summary.get("sglang_version")
-    if reported_version is None:
+    if not isinstance(reported_version, str) or not reported_version:
         raise RuntimeError("Judge /server_info did not report version.")
-    if str(reported_version) != config.judge.sglang_version:
+    if reported_version != config.judge.sglang_version:
         raise RuntimeError(
             f"Judge server sglang_version={reported_version!r} does not match "
             f"judge.sglang_version={config.judge.sglang_version!r}."
         )
+
+    identity = verify_model_identity(config.judge.model_path, config.judge.model_identity)
+    summary["model_identity"] = identity
     return summary
+
+
+def verify_recorded_judge_server(
+    config: ExperimentConfig, snapshot: dict[str, Any]
+) -> dict[str, Any]:
+    info = dict(snapshot)
+    if "sglang_version" in info and "version" not in info:
+        info["version"] = info["sglang_version"]
+    verified = verify_judge_server(config, info)
+    recorded_identity = snapshot.get("model_identity")
+    expected = {
+        "files": config.judge.model_identity.files,
+        "weight_manifest_sha256": config.judge.model_identity.weight_manifest_sha256,
+    }
+    if recorded_identity != expected and recorded_identity != verified["model_identity"]:
+        if recorded_identity != expected:
+            raise RuntimeError(
+                "Judge snapshot model_identity does not match the YAML identity."
+            )
+    return verified
 
 
 def verify_generator_server(
@@ -111,17 +216,24 @@ def verify_generator_server(
     served_model: str,
     info: dict[str, Any] | None,
     model_card: dict[str, Any] | None,
-) -> None:
+) -> str:
     reported = None
     if info:
         reported = info.get("model_path") or info.get("model")
     if not reported and model_card:
         reported = model_card.get("root") or model_card.get("model_path")
-    if reported and not paths_equal(reported, expected_path):
+    if not reported or not isinstance(reported, str):
+        raise RuntimeError(
+            f"Generator {served_model!r} did not report a model path via "
+            "/server_info or /v1/models. Refusing to treat YAML model_path "
+            "as verified."
+        )
+    if not paths_equal(reported, expected_path):
         raise RuntimeError(
             f"Generator {served_model!r} is serving {reported!r}, "
             f"expected {str(expected_path)!r}."
         )
+    return reported
 
 
 def load_judge_server_snapshot(config: ExperimentConfig) -> dict[str, Any]:
@@ -133,7 +245,7 @@ def load_judge_server_snapshot(config: ExperimentConfig) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict) or not payload:
         raise RuntimeError(f"Judge snapshot is empty or invalid: {path}")
-    return payload
+    return verify_recorded_judge_server(config, payload)
 
 
 def ensure_judge_server_snapshot(

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from clapnq_eval.config import ExperimentConfig, ModelConfig, load_config
+from clapnq_eval.config import ExperimentConfig, ModelConfig, ModelIdentity, load_config
 from clapnq_eval.data import Example
 from clapnq_eval.generate import generation_parameters
 from clapnq_eval.io import read_jsonl, record_sha256, write_jsonl
@@ -104,6 +104,24 @@ class ReportTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Unexpected example_id"):
                 score_run(config)
 
+    def test_score_rejects_snapshot_that_disagrees_with_yaml(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config, example = self._config(Path(directory))
+            self._write_complete_conditions(config, example)
+            tampered = self._judge_server(config)
+            tampered["random_seed"] = 7
+            path = config.run_dir / "judge_server.json"
+            path.write_text(json.dumps(tampered, sort_keys=True) + "\n", encoding="utf-8")
+            for condition in config.generation.conditions:
+                row_path = (
+                    config.run_dir / "judgments" / f"test-model.{condition}.jsonl"
+                )
+                row = next(read_jsonl(row_path))
+                row["judge_server"] = tampered
+                write_jsonl(row_path, [row])
+            with self.assertRaisesRegex(RuntimeError, "random_seed"):
+                score_run(config)
+
     def test_score_rejects_missing_judge_server_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config, example = self._config(Path(directory))
@@ -190,6 +208,11 @@ class ReportTests(unittest.TestCase):
             "test-model": ModelConfig(
                 served_model="served-model",
                 model_path=root / "fake-model",
+                vllm_version="0.27.1",
+                model_identity=ModelIdentity(
+                    files={"config.json": "ab" * 32},
+                    weight_manifest_sha256="cd" * 32,
+                ),
             )
         }
         config.generation.conditions = ["gold", "closed_book"]
@@ -288,6 +311,12 @@ class ReportTests(unittest.TestCase):
             "model_path": str(config.judge.model_path),
             "served_model_name": config.judge.served_model,
             "random_seed": config.run.seed,
+            "model_identity": {
+                "files": dict(config.judge.model_identity.files),
+                "weight_manifest_sha256": (
+                    config.judge.model_identity.weight_manifest_sha256
+                ),
+            },
         }
 
     def _write_snapshot(self, config: ExperimentConfig) -> None:

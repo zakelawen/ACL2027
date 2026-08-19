@@ -15,12 +15,40 @@ models:
   qwen2.5-7b:
     served_model: qwen2.5-7b
     model_path: /mnt/model/Qwen2.5-7B-Instruct
+    vllm_version: "0.27.1"
+    model_identity:
+      weight_manifest_sha256: e56c20dcb5258457ee34185246b049b7d82d1a1d0bbf6ba986489ec6c56a2e1e
+      files:
+        config.json: 7463bb0ea78315365e6c6b74de4e73bbcc8359dfb0c5a737584e077d42c0b03c
+        generation_config.json: 3a8f9087e486054c8a4a08dae2e5a3ba62e23da212b5b8c08bc42cb983c3459f
+        tokenizer_config.json: 5b5d4f65d0acd3b2d56a35b56d374a36cbc1c8fa5cf3b3febbbfabf22f359583
+        tokenizer.json: c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539
+        model.safetensors.index.json: 624bf7c47cd12468fdc16e38a47cf4f19e0415b859a223ba3c027eed2f0e1028
   llama3.1-8b:
     served_model: llama3.1-8b
     model_path: /mnt/model/Meta-Llama-3.1-8B-Instruct
+    vllm_version: "0.27.1"
+    model_identity:
+      weight_manifest_sha256: 7b43750ba5a39ba97d770cdef3f946d14ae85b8cc77dc9694c8a408eea297e0d
+      files:
+        config.json: 29e4c210b0d6ac178b16b2a255a568bdb23b581e50ca1ef6a6d071dd85704e6e
+        generation_config.json: 189fb0c0d7fd8a527db217c0a60a0e013f0394cd8800f9697a666a9e75e5f7fd
+        tokenizer_config.json: c514721b68891b556f07af8a3c2dfc623bff5ebf99a6e3b34ad0d709b0e14d6e
+        tokenizer.json: 6b9e4e7fb171f92fd137b777cc2714bf87d11576700a1dcd7a399e7bbe39537b
+        chat_template.jinja: e10ca381b1ccc5cf9db52e371f3b6651576caee0a630b452e2816b2d404d4b65
+        model.safetensors.index.json: 146776fce3f6db1103aa6f249e65ee5544c5923ce6f971b092eee79aa6e5d37b
   mistral-7b:
     served_model: mistral-7b
     model_path: /mnt/model/Mistral-7B-Instruct-v0.3
+    vllm_version: "0.27.1"
+    model_identity:
+      weight_manifest_sha256: 9e8f59f0725609c1cd249902ca6544da7023c1db9a90355860e3eb737c3fb750
+      files:
+        config.json: 9262d15f830e511429ccd175a71680e51c656ef3a4aa7460f3e9596508d32487
+        generation_config.json: 1be59aba03aa1e31bef5bc190a3a2591ad1a754f96afcecc42bd342722447220
+        tokenizer_config.json: b0c776216a54c6d031866d1dff0b31715bd73f5ba87f8a30eb35e8c603dff95d
+        tokenizer.json: 60b945759e27a63c3c5c0ca675881f5a73b4aa38b5d1d6818570308d4f1a3c59
+        model.safetensors.index.json: e489ba553b87cde188d921b1a8283c2e0b9d33d635b88147d96ff0fcd6250016
 
 generation:
   base_url: http://127.0.0.1:8000/v1
@@ -46,6 +74,16 @@ judge:
   sglang_version: "0.5.17"
   enable_thinking: false
   deterministic_inference: true
+  model_identity:
+    weight_manifest_sha256: 6276c8fdf804a33628fd4705098bc5e6aafcacd28ca0fa4af9c07bae0eb75d2b
+    files:
+      config.json: 74227dd615bf1ea975aa676bdf355a0379858c12f394b5365cd9dfa5fc2c70bc
+      generation_config.json: e70c136c1b78ddc1fb0905bac8e733a4dc448d4f852a5dd75143fffc70be550e
+      tokenizer_config.json: b11349aafa7cdc6a320767cf7ceb29ed82f7eda5d65e8e0819e76f0ce947bf27
+      tokenizer.json: 0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3
+      chat_template.jinja: c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041
+      preprocessor_config.json: 27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516
+      model.safetensors.index.json: f0838c766951bdfe76d6afbdb2771a8f67aaa2231dedb3d33cebd817729843a2
 
   # Custom structured-judge profile: official non-thinking sampling
   # except presence_penalty. Official chat non-thinking uses 1.5; this
@@ -69,4 +107,3 @@ metrics:
   allow_rouge_fallback: false
   bertscore: false
   bertscore_model: roberta-large
-

@@ -47,9 +47,37 @@ class RunConfig(StrictModel):
         return value
 
 
+class ModelIdentity(StrictModel):
+    files: dict[str, str]
+    weight_manifest_sha256: str
+
+    @field_validator("files")
+    @classmethod
+    def validate_file_digests(cls, value: dict[str, str]) -> dict[str, str]:
+        if not value:
+            raise ValueError("model_identity.files cannot be empty")
+        cleaned: dict[str, str] = {}
+        for name, digest in value.items():
+            digest = digest.strip().lower()
+            if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+                raise ValueError(f"invalid SHA-256 for {name}")
+            cleaned[name] = digest
+        return cleaned
+
+    @field_validator("weight_manifest_sha256")
+    @classmethod
+    def validate_manifest_digest(cls, value: str) -> str:
+        value = value.strip().lower()
+        if len(value) != 64 or any(ch not in "0123456789abcdef" for ch in value):
+            raise ValueError("weight_manifest_sha256 must be a 64-character hex digest")
+        return value
+
+
 class ModelConfig(StrictModel):
     served_model: str
     model_path: Path
+    vllm_version: str
+    model_identity: ModelIdentity
 
 
 class RequestConfig(StrictModel):
@@ -83,6 +111,7 @@ class JudgeConfig(RequestConfig):
     served_model: str
     model_path: Path
     sglang_version: str
+    model_identity: ModelIdentity
     enable_thinking: bool = False
     deterministic_inference: bool = True
     temperature: float = Field(default=0.7, ge=0)

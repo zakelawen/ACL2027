@@ -134,12 +134,16 @@ A fixed request seed and server seed are used. Formal Judge serving
 enables SGLang batch-invariant deterministic inference by default.
 `judge` queries SGLang `/server_info` before any request and refuses to
 run unless deterministic mode, served name, `model_path`, `random_seed`
-(`run.seed`), and `sglang_version` all match the YAML. The verified
-snapshot is created once at `runs/<run-name>/judge_server.json` and must
-remain byte-for-byte identical for the rest of the run. Formal `score`
-requires that file and requires every judgment row to carry the same
-snapshot. A later Judge process that differs is rejected and does not
-overwrite the snapshot.
+(`run.seed`), and `sglang_version` all match the YAML. It also hashes
+tokenizer/config/chat-template/index files and the safetensors size
+manifest against `judge.model_identity`. The verified snapshot is created
+once at `runs/<run-name>/judge_server.json`. Formal `score` reloads that
+file, checks it against the YAML again (strict types; `"false"` is not
+`false`), and requires every judgment row to carry the same snapshot.
+
+`generate` fails closed if vLLM does not report a live model path, retries
+`/server_info` and `/v1/models`, checks the on-disk identity hashes, and
+checks `/version` against `models.*.vllm_version`.
 
 Opt out only for throughput experiments, and change **both** the process
 flag and the YAML:

@@ -8,7 +8,11 @@ from typing import Any
 from tqdm import tqdm
 
 from .api import ChatClient, retry_async
-from .runtime import verify_generator_server
+from .runtime import (
+    verify_generator_server,
+    verify_model_identity,
+    versions_match,
+)
 from .config import Condition, ExperimentConfig
 from .data import Example, load_examples
 from .io import (
@@ -195,15 +199,38 @@ async def _verify_live_generator(
     model_key: str,
     served_model: str,
 ) -> None:
+    model_config = config.models[model_key]
     info: dict[str, Any] | None = None
     try:
-        info = await client.get_server_info()
+        info = await retry_async(
+            client.get_server_info,
+            attempts=config.generation.max_retries,
+            base_seconds=config.generation.retry_base_seconds,
+            description=f"generator /server_info for {served_model}",
+        )
     except RuntimeError:
         info = None
-    card = await client.get_model_card(served_model)
+    card = await retry_async(
+        lambda: client.get_model_card(served_model),
+        attempts=config.generation.max_retries,
+        base_seconds=config.generation.retry_base_seconds,
+        description=f"generator /v1/models for {served_model}",
+    )
     verify_generator_server(
-        expected_path=config.models[model_key].model_path,
+        expected_path=model_config.model_path,
         served_model=served_model,
         info=info,
         model_card=card,
     )
+    verify_model_identity(model_config.model_path, model_config.model_identity)
+    version = await retry_async(
+        client.get_engine_version,
+        attempts=config.generation.max_retries,
+        base_seconds=config.generation.retry_base_seconds,
+        description=f"generator /version for {served_model}",
+    )
+    if not versions_match(version, model_config.vllm_version):
+        raise RuntimeError(
+            f"Generator vLLM version {version!r} does not match "
+            f"models.{model_key}.vllm_version={model_config.vllm_version!r}."
+        )
