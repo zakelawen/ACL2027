@@ -6,8 +6,11 @@ A reproducible evaluation pipeline for one focused question:
 
 The project evaluates the same CLAPnq answerable questions under two conditions:
 
-- `gold`: system instruction + title + full Gold passage + question;
+- `gold`: system instruction + full Gold passage + question;
 - `closed_book`: the same system instruction + question only.
+
+The Wikipedia title is stored on each example for audit. It is not sent to
+the generator, so Gold versus closed-book differs only by the passage.
 
 The correctness Judge receives only the question, all valid human reference answers, and the candidate answer. It never receives the passage, selected sentences, generator identity, or experimental condition.
 
@@ -126,13 +129,16 @@ SGLang Judge request sets
 the model's strongest official profile and should be a separately
 calibrated ablation with a much larger `max_tokens`.
 
-A fixed request seed and server seed are used. The SGLang script also supports batch-invariant deterministic inference for calibration:
+A fixed request seed and server seed are used. Formal Judge serving
+enables SGLang batch-invariant deterministic inference by default, matching
+`judge.deterministic_inference=true` in the YAML. That flag is part of the
+run signature. Opt out only for throughput experiments:
 
 ```bash
-DETERMINISTIC_INFERENCE=1 bash scripts/serve_judge.sh
+DETERMINISTIC_INFERENCE=0 bash scripts/serve_judge.sh
 ```
 
-This option can reduce throughput. A greedy Judge profile (`temperature=0`) should be treated as a separately calibrated ablation, not as the official Qwen3.8 profile.
+This default can reduce throughput. A greedy Judge profile (`temperature=0`) should be treated as a separately calibrated ablation, not as the official Qwen3.8 profile.
 
 The Judge server uses TP=2, text-only model loading, CPU transport for unused
 multimodal features, and five concurrent requests. The five-request default
@@ -156,7 +162,7 @@ The loader:
 - uses `passages[0].text` as the Full-Gold passage;
 - excludes `meta.skip=true`, empty, `NA`, and `N/A` outputs;
 - preserves and deduplicates all remaining human references;
-- retains `selected_sentences` for audit but never sends them to generators or the Judge.
+- retains `title` and `selected_sentences` for audit but never sends them to generators or the Judge.
 
 ## 2. Generate answers
 

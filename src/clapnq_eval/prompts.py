@@ -6,7 +6,7 @@ import html
 from .config import Condition
 
 
-GENERATION_PROMPT_VERSION = "generation-v1.0"
+GENERATION_PROMPT_VERSION = "generation-v1.1"
 JUDGE_PROMPT_VERSION = "correctness-judge-v1.1"
 
 
@@ -233,9 +233,9 @@ def build_generation_user_prompt(
     if condition == "gold":
         if not passage.strip():
             raise ValueError("gold condition requires a non-empty passage")
-        title_block = f"Title: {title.strip()}\n\n" if title.strip() else ""
+        # Title is kept on the Example for audit only and is not sent here.
         return (
-            f"{title_block}Passage:\n{passage.strip()}\n\n"
+            f"Passage:\n{passage.strip()}\n\n"
             f"Question: {question}\n\nAnswer:"
         )
     if condition == "closed_book":

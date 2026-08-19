@@ -27,6 +27,7 @@ class JudgeQuarantineTests(unittest.TestCase):
     def test_infrastructure_failures_are_not_quarantined(self) -> None:
         self.assertFalse(is_quarantine_error(RuntimeError("failed after 5 attempts")))
         self.assertFalse(is_quarantine_error(FileNotFoundError("missing")))
+        self.assertFalse(is_quarantine_error(ValueError("Unsupported extra_body keys")))
 
 
 if __name__ == "__main__":

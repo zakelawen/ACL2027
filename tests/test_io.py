@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -70,6 +71,22 @@ class JsonlTests(unittest.TestCase):
             )
             drop_resolved_rows(path, {"2"})
             self.assertFalse(path.exists())
+
+    def test_utf8_truncated_tail_is_tolerated_for_resume(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "records.jsonl"
+            complete = json.dumps({"example_id": "1", "text": "ok"}, ensure_ascii=False)
+            # Truncate a multibyte character mid-sequence (U+4E2D is e4 b8 ad).
+            truncated = b'{"example_id":"2","text":"' + b"\xe4\xb8"
+            path.write_bytes((complete + "\n").encode("utf-8") + truncated)
+            rows = list(read_jsonl(path, tolerate_trailing_partial=True))
+            self.assertEqual(rows, [{"example_id": "1", "text": "ok"}])
+
+            append_jsonl(path, {"example_id": "2", "text": "recovered"})
+            self.assertEqual(
+                [row["example_id"] for row in read_jsonl(path)],
+                ["1", "2"],
+            )
 
     def test_invalid_middle_line_raises(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -18,19 +18,28 @@ def read_jsonl(
     tolerate_trailing_partial: bool = False,
 ) -> Iterator[dict[str, Any]]:
     path = Path(path)
-    with path.open("r", encoding="utf-8") as handle:
-        for line_number, line in enumerate(handle, start=1):
-            if not line.strip():
+    with path.open("rb") as handle:
+        line_number = 0
+        while True:
+            raw_line = handle.readline()
+            if raw_line == b"":
+                return
+            line_number += 1
+            if not raw_line.strip():
                 continue
+            try:
+                line = raw_line.decode("utf-8")
+            except UnicodeDecodeError:
+                if _is_tolerated_tail(handle, raw_line, tolerate_trailing_partial):
+                    LOGGER.warning("Ignoring incomplete final JSONL line in %s", path)
+                    return
+                raise ValueError(
+                    f"Invalid UTF-8 in {path} at line {line_number}"
+                ) from None
             try:
                 value = json.loads(line)
             except json.JSONDecodeError:
-                is_unterminated_tail = not line.endswith(("\n", "\r"))
-                if (
-                    tolerate_trailing_partial
-                    and is_unterminated_tail
-                    and _only_blank_lines_remain(handle)
-                ):
+                if _is_tolerated_tail(handle, raw_line, tolerate_trailing_partial):
                     LOGGER.warning("Ignoring incomplete final JSONL line in %s", path)
                     return
                 raise ValueError(f"Invalid JSON in {path} at line {line_number}") from None
@@ -121,13 +130,14 @@ def record_sha256(value: Any) -> str:
 
 
 @contextmanager
-def exclusive_output_lock(path: str | Path) -> Iterator[None]:
+def exclusive_output_lock(path: str | Path, *, blocking: bool = False) -> Iterator[None]:
     target = Path(path)
     lock_path = target.with_suffix(target.suffix + ".lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
+    flags = fcntl.LOCK_EX if blocking else fcntl.LOCK_EX | fcntl.LOCK_NB
     with lock_path.open("a+", encoding="utf-8") as handle:
         try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(handle.fileno(), flags)
         except BlockingIOError as error:
             raise RuntimeError(
                 f"Another process is already writing {target}"
@@ -168,6 +178,16 @@ def _repair_unterminated_tail(handle: Any, path: Path) -> None:
         handle.truncate(tail_start)
 
 
-def _only_blank_lines_remain(handle: Any) -> bool:
+def _is_tolerated_tail(
+    handle: Any, raw_line: bytes, tolerate_trailing_partial: bool
+) -> bool:
+    return bool(
+        tolerate_trailing_partial
+        and not raw_line.endswith((b"\n", b"\r"))
+        and _only_blank_bytes_remain(handle)
+    )
+
+
+def _only_blank_bytes_remain(handle: Any) -> bool:
     return all(not remaining.strip() for remaining in handle)
 

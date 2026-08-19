@@ -65,7 +65,12 @@ class JudgeExampleError(Exception):
 def is_quarantine_error(error: BaseException) -> bool:
     return isinstance(
         error,
-        (JudgeExampleError, ChatCompletionError, ValidationError, ValueError, json.JSONDecodeError),
+        (
+            JudgeExampleError,
+            ChatCompletionError,
+            ValidationError,
+            json.JSONDecodeError,
+        ),
     )
 
 

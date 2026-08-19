@@ -13,6 +13,7 @@ class ConfigTests(unittest.TestCase):
     def test_official_non_thinking_judge_profile(self) -> None:
         config = load_config(CONFIG)
         self.assertFalse(config.judge.enable_thinking)
+        self.assertTrue(config.judge.deterministic_inference)
         self.assertEqual(config.judge.temperature, 0.7)
         self.assertEqual(config.judge.top_p, 0.8)
         self.assertEqual(config.judge.top_k, 20)

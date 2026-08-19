@@ -34,6 +34,7 @@ def generation_parameters(config: ExperimentConfig) -> dict[str, Any]:
 def judge_parameters(config: ExperimentConfig) -> dict[str, Any]:
     return {
         "enable_thinking": config.judge.enable_thinking,
+        "deterministic_inference": config.judge.deterministic_inference,
         "temperature": config.judge.temperature,
         "top_p": config.judge.top_p,
         "top_k": config.judge.top_k,

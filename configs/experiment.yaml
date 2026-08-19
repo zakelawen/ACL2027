@@ -40,6 +40,7 @@ judge:
   api_key: EMPTY
   served_model: qwen3.8-27b-judge
   enable_thinking: false
+  deterministic_inference: true
 
   # Official Qwen3.8 non-thinking sampling, except presence_penalty.
   # Official chat non-thinking uses 1.5; this Judge uses 0.0 because the

@@ -81,6 +81,7 @@ class GenerationConfig(RequestConfig):
 class JudgeConfig(RequestConfig):
     served_model: str
     enable_thinking: bool = False
+    deterministic_inference: bool = True
     temperature: float = Field(default=0.7, ge=0)
     top_p: float = Field(default=0.8, gt=0, le=1)
     top_k: int = Field(default=20, ge=0)

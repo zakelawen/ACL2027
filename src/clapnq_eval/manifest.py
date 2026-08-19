@@ -9,7 +9,7 @@ from typing import Any
 
 from . import __version__
 from .config import ExperimentConfig
-from .io import record_sha256
+from .io import exclusive_output_lock, record_sha256
 from .prompts import (
     GENERATION_PROMPT_VERSION,
     GENERATION_SYSTEM_PROMPT,
@@ -42,37 +42,38 @@ def update_manifest(
     action: str,
     details: dict[str, Any] | None = None,
 ) -> Path:
-    ensure_manifest_compatible(config)
     config.run_dir.mkdir(parents=True, exist_ok=True)
     path = config.run_dir / "manifest.json"
-    now = datetime.now(timezone.utc).isoformat()
+    with exclusive_output_lock(path, blocking=True):
+        ensure_manifest_compatible(config)
+        now = datetime.now(timezone.utc).isoformat()
 
-    if path.exists():
-        manifest = json.loads(path.read_text(encoding="utf-8"))
-    else:
-        manifest = {
-            "created_at": now,
-            "project_version": __version__,
-            "python": platform.python_version(),
-            "platform": platform.platform(),
-            "packages": _package_versions(),
-            "actions": [],
-        }
+        if path.exists():
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+        else:
+            manifest = {
+                "created_at": now,
+                "project_version": __version__,
+                "python": platform.python_version(),
+                "platform": platform.platform(),
+                "packages": _package_versions(),
+                "actions": [],
+            }
 
-    manifest["updated_at"] = now
-    manifest["config"] = _redact(config.model_dump(mode="json"))
-    manifest["prompts"] = _prompt_metadata()
-    manifest["run_signature"] = _run_signature(config)
-    manifest["actions"].append(
-        {
-            "name": action,
-            "time": now,
-            "details": details or {},
-        }
-    )
-    _write_json(path, manifest)
-    _snapshot_prompts(config.run_dir)
-    return path
+        manifest["updated_at"] = now
+        manifest["config"] = _redact(config.model_dump(mode="json"))
+        manifest["prompts"] = _prompt_metadata()
+        manifest["run_signature"] = _run_signature(config)
+        manifest["actions"].append(
+            {
+                "name": action,
+                "time": now,
+                "details": details or {},
+            }
+        )
+        _write_json(path, manifest)
+        _snapshot_prompts(config.run_dir)
+        return path
 
 
 def _prompt_metadata() -> dict[str, dict[str, str]]:

@@ -18,7 +18,9 @@ export PATH="${SGLANG_ENV}/bin:${PATH}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
 
 EXTRA_ARGS=()
-if [[ "${DETERMINISTIC_INFERENCE:-0}" == "1" ]]; then
+# Default on: temperature=0.7 plus dynamic batching is not reproducible
+# from seed alone. Set DETERMINISTIC_INFERENCE=0 to opt out.
+if [[ "${DETERMINISTIC_INFERENCE:-1}" != "0" ]]; then
   EXTRA_ARGS+=(--enable-deterministic-inference)
 fi
 

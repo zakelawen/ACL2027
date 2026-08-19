@@ -21,6 +21,8 @@ class PromptTests(unittest.TestCase):
         )
         closed = build_generation_user_prompt(condition="closed_book", question="Question?")
         self.assertIn("Passage:\nEvidence text.", gold)
+        self.assertNotIn("Title:", gold)
+        self.assertNotIn("Title", gold)
         self.assertNotIn("Passage:", closed)
         self.assertNotIn("Evidence text.", closed)
         self.assertTrue(gold.endswith("Answer:"))
