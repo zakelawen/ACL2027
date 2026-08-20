@@ -60,9 +60,10 @@ class PromptTests(unittest.TestCase):
         from clapnq_eval.prompts import JUDGE_SYSTEM_PROMPT, JUDGE_PROMPT_VERSION
 
         self.assertEqual(JUDGE_PROMPT_VERSION, "correctness-judge-v1.2")
-        self.assertIn("as a checklist of details", JUDGE_SYSTEM_PROMPT)
-        self.assertIn("Do not require the union of extra names", JUDGE_SYSTEM_PROMPT)
-        self.assertIn("prefer CORRECT over MINOR_ERROR", JUDGE_SYSTEM_PROMPT)
+        collapsed = " ".join(JUDGE_SYSTEM_PROMPT.split())
+        self.assertIn("as a checklist of details", collapsed)
+        self.assertIn("Do NOT require the union of extra names", collapsed)
+        self.assertIn("prefer CORRECT over MINOR_ERROR", collapsed)
 
 
 if __name__ == "__main__":
