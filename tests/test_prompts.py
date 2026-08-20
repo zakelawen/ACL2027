@@ -56,6 +56,14 @@ class PromptTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             JudgeResult(reason="x", label="UNKNOWN")  # type: ignore[arg-type]
 
+    def test_judge_prompt_judges_the_question_not_the_dump(self) -> None:
+        from clapnq_eval.prompts import JUDGE_SYSTEM_PROMPT, JUDGE_PROMPT_VERSION
+
+        self.assertEqual(JUDGE_PROMPT_VERSION, "correctness-judge-v1.2")
+        self.assertIn("not as a checklist", JUDGE_SYSTEM_PROMPT)
+        self.assertIn("Do not require the union of extra names", JUDGE_SYSTEM_PROMPT)
+        self.assertIn("prefer CORRECT over MINOR_ERROR", JUDGE_SYSTEM_PROMPT)
+
 
 if __name__ == "__main__":
     unittest.main()

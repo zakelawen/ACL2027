@@ -68,7 +68,7 @@ BERTScore is disabled by default because it downloads an additional encoder.
 
 The common generation instruction is a system message. Gold and closed-book use the same instruction and differ only in the user-provided evidence. Each generator uses its native chat template.
 
-The Judge is reference-based and pointwise. It returns one structured label:
+The Judge is reference-based and pointwise. It judges whether the question was answered correctly, not whether every extra detail in a long Wikipedia-style reference was copied. It returns one structured label:
 
 - `CORRECT`;
 - `MINOR_ERROR`;
